@@ -323,7 +323,13 @@ def forecast(case):
         curve_weight = 0.25 + 0.35 * information
         trend_weight = 0.25 + 0.10 * min(1.0, movement)
         persistence_weight = 1.0 - curve_weight - trend_weight
-        components = [(1.0 - refresh_probability, current, 0.0)]
+        # Approximate the uniform 0.01-percentage-point rounding bin on logit scale.
+        rounding_spread = (to_logit(rate + 0.005) - to_logit(rate - 0.005)) / math.sqrt(12.0)
+        # The binary refresh decision is approximate. Retain residual process
+        # variance proportional to p(1-p), largest when refresh timing is ambiguous.
+        timing_variance = refresh_probability * (1.0 - refresh_probability)
+        unchanged_spread = math.hypot(rounding_spread, base_spread * math.sqrt(timing_variance))
+        components = [(1.0 - refresh_probability, current, unchanged_spread)]
         components.append((refresh_probability * persistence_weight, current, max(0.08, base_spread)))
         components.append((refresh_probability * trend_weight, current + drift,
                            max(0.08, base_spread * 0.8 + 0.2 * scatter * age_distance)))
